@@ -3,6 +3,12 @@
 Full-screen, browser-based camera wall for any RTSP source.  
 Password-protected, persistent login — built to run on low-power hardware like a Raspberry Pi or mini PC.
 
+<p align="center">
+  <img src="docs/login.png" width="48%" alt="Login screen" />
+  &nbsp;
+  <img src="docs/watch.png" width="48%" alt="Camera wall" />
+</p>
+
 ## How it works
 
 ```
