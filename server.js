@@ -94,6 +94,13 @@ app.use(
     target: MEDIAMTX_URL,
     changeOrigin: true,
     pathRewrite: { '^/streams': '' },
+    onProxyRes(proxyRes) {
+      // mediamtx issues a cookie-check redirect with a path like /cam1/index.m3u8?cookieCheck=1
+      // which strips the /streams prefix. Rewrite it so the browser stays on the proxied path.
+      if (proxyRes.headers.location) {
+        proxyRes.headers.location = '/streams' + proxyRes.headers.location;
+      }
+    },
     onError(_err, _req, res) {
       if (!res.headersSent) res.status(502).end();
     },
