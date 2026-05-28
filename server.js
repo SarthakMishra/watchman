@@ -287,6 +287,24 @@ html,body{height:100%;background:#000;overflow:hidden}
 }
 body:hover .logout{opacity:1}
 .logout:hover{color:#aaa;border-color:#3a3a3a}
+
+/* ── Tablet (≤ 900px): 2-column scrollable grid ── */
+@media(max-width:900px){
+  html,body{height:auto;overflow-y:auto}
+  .grid{height:auto;min-height:100dvh;grid-template-columns:repeat(2,1fr);grid-template-rows:auto}
+  .tile{aspect-ratio:16/9}
+}
+
+/* ── Mobile (≤ 540px): single column ── */
+@media(max-width:540px){
+  .grid{grid-template-columns:1fr}
+}
+
+/* ── Touch devices: labels and logout always visible (no hover) ── */
+@media(hover:none){
+  .label{opacity:1}
+  .logout{opacity:1}
+}
 </style>
 </head>
 <body>
