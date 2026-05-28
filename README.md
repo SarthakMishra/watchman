@@ -86,27 +86,20 @@ The grid adjusts automatically based on how many cameras are configured:
 
 ## H.265 / HEVC cameras
 
-Most browsers cannot decode H.265 streams. If your cameras output H.265 (common on many modern IP cameras), you need to transcode to H.264 using mediamtx's built-in ffmpeg support.
+Most browsers cannot decode H.265 streams. If your cameras output H.265 (common on many modern IP cameras), you need to transcode to H.264 using mediamtx's built-in ffmpeg support. The `mediamtx:latest-ffmpeg` image is already configured in `docker-compose.yml`.
 
-**Step 1** — switch the mediamtx image in `docker-compose.yml`:
-```yaml
-image: bluenviron/mediamtx:latest-ffmpeg
-```
-
-**Step 2** — in `.env`, use a `cam*src` / `cam*` path pair for each camera instead of a single `MTX_PATHS_CAM*_SOURCE` entry:
+In `.env`, use `RUNONDEMAND` entries instead of `SOURCE` for each camera:
 
 ```
-# cam1src = raw H.265 from camera (internal)
-# cam1    = H.264 re-published by ffmpeg (what the browser plays)
-
-MTX_PATHS_CAM1SRC_SOURCE=rtsp://user:password@192.168.1.101/stream2
-MTX_PATHS_CAM1SRC_RUNONREADY=ffmpeg -loglevel error -rtsp_transport tcp -i rtsp://localhost:8554/cam1src -c:v libx264 -preset ultrafast -tune zerolatency -b:v 1000k -an -f rtsp rtsp://localhost:8554/cam1
-MTX_PATHS_CAM1SRC_RUNONREADYRESTART=yes
+MTX_PATHS_CAM1_RUNONDEMAND=ffmpeg -loglevel error -rtsp_transport tcp -i rtsp://user:password@192.168.1.101/stream2 -c:v libx264 -preset ultrafast -tune zerolatency -b:v 1000k -an -f rtsp rtsp://localhost:8554/cam1
+MTX_PATHS_CAM1_RUNONDEMANDRESTART=yes
 ```
 
-Repeat for each camera, incrementing the number (`cam2src` → `cam2`, etc.). The `CAMERAS` env var and your browser-facing path names (`cam1`, `cam2`, …) stay the same — only the `.env` source entries change.
+Repeat for each camera (`CAM2`, `CAM3`, …). The `CAMERAS` env var and browser-facing path names stay the same — only the `.env` source entries change.
 
-The `-preset ultrafast -b:v 1000k` flags keep CPU usage low on constrained hardware. Raise the bitrate if you need sharper image quality.
+**How on-demand works:** ffmpeg only starts when a viewer opens the wall and shuts down ~10 seconds after the last viewer leaves. No CPU is used when nobody is watching.
+
+The `-preset ultrafast -b:v 1000k` flags keep transcoding cost low on constrained hardware. Raise the bitrate if you need sharper image quality.
 
 ---
 

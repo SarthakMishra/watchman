@@ -11,8 +11,7 @@ services:
       MTX_HLSSEGMENTCOUNT: "7"
       MTX_HLSSEGMENTDURATION: 1s
       MTX_HLSALWAYSREMUX: "yes"
-      MTX_PATHDEFAULTS_SOURCEONDEMAND: "no"
-      # Camera sources (MTX_PATHS_CAM*_SOURCE) are loaded from .env automatically.
+      # Camera runOnDemand hooks (MTX_PATHS_CAM*_RUNONDEMAND) are loaded from .env automatically.
       # Add them there — see .env.example for the format.
     networks:
       - internal
