@@ -1,0 +1,49 @@
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    restart: unless-stopped
+    environment:
+      MTX_LOGLEVEL: warn
+      # HLS tuning — 1 s segments, 3-segment window = ~3 s glass-to-glass latency
+      MTX_HLSSEGMENTCOUNT: "3"
+      MTX_HLSSEGMENTDURATION: 1s
+      # Always keep HLS segments buffered so the page loads instantly
+      MTX_HLSALWAYSREMUX: "yes"
+      # Maintain camera connections at startup, not on first viewer
+      MTX_PATHDEFAULTS_SOURCEONDEMAND: "no"
+
+      # ── Add cameras here ──────────────────────────────────────────────────
+      # Path names (CAM1, CAM2 …) must match the ids in CAMERAS on the app service.
+      # Use /stream2 (sub-stream) for lower bandwidth — save /stream1 for recordings.
+      #
+      # MTX_PATHS_CAM1_SOURCE: "rtsp://user:pass@192.168.1.101/stream2"
+      # MTX_PATHS_CAM2_SOURCE: "rtsp://user:pass@192.168.1.102/stream2"
+      # MTX_PATHS_CAM3_SOURCE: "rtsp://user:pass@192.168.1.103/stream2"
+      # MTX_PATHS_CAM4_SOURCE: "rtsp://user:pass@192.168.1.104/stream2"
+      # MTX_PATHS_CAM5_SOURCE: "rtsp://user:pass@192.168.1.105/stream2"
+      # MTX_PATHS_CAM6_SOURCE: "rtsp://user:pass@192.168.1.106/stream2"
+    networks:
+      - internal
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Required: set a strong password
+      PASSWORD: changeme
+
+      MEDIAMTX_URL: http://mediamtx:8888
+
+      # Camera labels shown on the wall.
+      # Format: "pathId:Display Label" — pathId must match mediamtx path names above.
+      # CAMERAS: "cam1:Front Door,cam2:Back Yard,cam3:Garage,cam4:Driveway,cam5:Side Gate,cam6:Pool"
+    depends_on:
+      - mediamtx
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
