@@ -1,27 +1,19 @@
 services:
   mediamtx:
-    image: bluenviron/mediamtx:latest
+    image: bluenviron/mediamtx:latest-ffmpeg
     restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
     environment:
+      # HLS tuning — always enforced; no need to touch these.
       MTX_LOGLEVEL: warn
-      # HLS tuning — 1 s segments, 3-segment window = ~3 s glass-to-glass latency
-      MTX_HLSSEGMENTCOUNT: "3"
+      MTX_HLSSEGMENTCOUNT: "7"
       MTX_HLSSEGMENTDURATION: 1s
-      # Always keep HLS segments buffered so the page loads instantly
       MTX_HLSALWAYSREMUX: "yes"
-      # Maintain camera connections at startup, not on first viewer
       MTX_PATHDEFAULTS_SOURCEONDEMAND: "no"
-
-      # ── Add cameras here ──────────────────────────────────────────────────
-      # Path names (CAM1, CAM2 …) must match the ids in CAMERAS on the app service.
-      # Use /stream2 (sub-stream) for lower bandwidth — save /stream1 for recordings.
-      #
-      # MTX_PATHS_CAM1_SOURCE: "rtsp://user:pass@192.168.1.101/stream2"
-      # MTX_PATHS_CAM2_SOURCE: "rtsp://user:pass@192.168.1.102/stream2"
-      # MTX_PATHS_CAM3_SOURCE: "rtsp://user:pass@192.168.1.103/stream2"
-      # MTX_PATHS_CAM4_SOURCE: "rtsp://user:pass@192.168.1.104/stream2"
-      # MTX_PATHS_CAM5_SOURCE: "rtsp://user:pass@192.168.1.105/stream2"
-      # MTX_PATHS_CAM6_SOURCE: "rtsp://user:pass@192.168.1.106/stream2"
+      # Camera sources (MTX_PATHS_CAM*_SOURCE) are loaded from .env automatically.
+      # Add them there — see .env.example for the format.
     networks:
       - internal
 
@@ -30,15 +22,13 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      # Required: set a strong password
-      PASSWORD: changeme
-
-      MEDIAMTX_URL: http://mediamtx:8888
-
-      # Camera labels shown on the wall.
-      # Format: "pathId:Display Label" — pathId must match mediamtx path names above.
-      # CAMERAS: "cam1:Front Door,cam2:Back Yard,cam3:Garage,cam4:Driveway,cam5:Side Gate,cam6:Pool"
+      # Falls back to the internal service name if not set in .env.
+      # Override to http://localhost:8888 when running the app outside Docker for dev.
+      MEDIAMTX_URL: ${MEDIAMTX_URL:-http://mediamtx:8888}
     depends_on:
       - mediamtx
     networks:
