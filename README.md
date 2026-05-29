@@ -91,15 +91,19 @@ Most browsers cannot decode H.265 streams. If your cameras output H.265 (common 
 In `.env`, use `RUNONDEMAND` entries instead of `SOURCE` for each camera:
 
 ```
-MTX_PATHS_CAM1_RUNONDEMAND=ffmpeg -loglevel error -rtsp_transport tcp -i rtsp://user:password@192.168.1.101/stream2 -c:v libx264 -preset ultrafast -tune zerolatency -b:v 1000k -an -f rtsp rtsp://localhost:8554/cam1
+MTX_PATHS_CAM1_RUNONDEMAND=ffmpeg -loglevel error -rtsp_transport tcp -i rtsp://user:password@192.168.1.101/stream2 -c:v libx264 -preset ultrafast -tune zerolatency -g 60 -keyint_min 60 -sc_threshold 0 -force_key_frames expr:gte(t,n_forced*1) -b:v 1000k -an -f rtsp rtsp://localhost:8554/cam1
 MTX_PATHS_CAM1_RUNONDEMANDRESTART=yes
 ```
 
 Repeat for each camera (`CAM2`, `CAM3`, …). The `CAMERAS` env var and browser-facing path names stay the same — only the `.env` source entries change.
 
+> **The ffmpeg command lives only in `.env`, never in the image.** Camera URLs and credentials differ per deployment, so the transcode config is intentionally not baked into the container. Pulling a newer `watchman` image updates the app and the browser player but leaves these entries untouched — keep your own `.env` (and any infra repo that holds it) as the source of truth.
+
 **How on-demand works:** ffmpeg only starts when a viewer opens the wall and shuts down ~10 seconds after the last viewer leaves. No CPU is used when nobody is watching.
 
 The `-preset ultrafast -b:v 1000k` flags keep transcoding cost low on constrained hardware. Raise the bitrate if you need sharper image quality.
+
+**Why the keyframe flags?** mediamtx cuts a new HLS segment every second (`MTX_HLSSEGMENTDURATION`). `-force_key_frames expr:gte(t,n_forced*1)` (backed by `-g`/`-keyint_min`/`-sc_threshold 0`) forces a keyframe every second so each segment starts on a keyframe and is self-contained. Without it, segments begin mid-GOP and any lost packet leaves the decoder smearing frames against a missing reference until the next keyframe — see [Intermittent corruption / smearing artifacts](#intermittent-corruption--smearing-artifacts). If you change the segment duration, keep the keyframe interval matched to it (`n_forced*2` for 2-second segments, etc.).
 
 ---
 
@@ -135,6 +139,20 @@ Docker Compose bakes env vars into the container at start time. After editing `.
 docker compose up -d
 ```
 A plain `docker compose restart` does **not** re-read `.env`.
+
+### Intermittent corruption / smearing artifacts
+
+Streaks, colour smearing, or "ghosting" that appears for a moment and then clears (especially after a network hiccup) means the decoder is rendering frames against a missing or corrupt reference frame. This happens when HLS segments don't start on a keyframe.
+
+Make sure every H.265 `RUNONDEMAND` entry includes the keyframe flags shown in [H.265 cameras](#h265-hevc-cameras):
+```
+-g 60 -keyint_min 60 -sc_threshold 0 -force_key_frames expr:gte(t,n_forced*1)
+```
+These force a keyframe every second to match the 1-second HLS segments, so corruption self-heals within ~1s instead of persisting. After editing `.env`, recreate the containers (`docker compose up -d`). H.264 pass-through (`_SOURCE`) cameras rely on the camera's own keyframe interval — if they smear, shorten the GOP/I-frame interval in the camera's settings.
+
+### Feed is out of sync / shows old video after the tab was in the background
+
+The browser throttles background tabs, so playback can drift behind live. The player caps live latency and snaps back to the live edge automatically when the tab regains focus — if you still see stale video, you're likely on an old `watchman` image; pull the latest (`docker compose pull && docker compose up -d`).
 
 ### Cookie-check redirect causes 404
 
@@ -179,6 +197,7 @@ npx dotenv-cli -e .env -- node --watch server.js
 # Push a test pattern into mediamtx as "cam1"
 ffmpeg -re -f lavfi -i testsrc=size=1280x720:rate=15 \
   -vcodec libx264 -tune zerolatency -preset ultrafast \
+  -g 15 -keyint_min 15 -sc_threshold 0 -force_key_frames expr:gte(t,n_forced*1) \
   -f rtsp rtsp://localhost:8554/cam1
 ```
 Set `CAMERAS=cam1:Test` and the wall will show the colour-bar pattern.
