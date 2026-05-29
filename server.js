@@ -327,18 +327,42 @@ cameras.forEach(({ id }) => {
   const video = document.getElementById('v-' + id);
   const src   = '/streams/' + id + '/index.m3u8';
 
+  let hls = null;
+  let recoverAttempts = 0;
+
   function setLive()    { tile.className = 'tile is-live'; }
   function setLoading() { tile.className = 'tile'; }
   function setOffline() { tile.className = 'tile is-offline'; }
 
+  // Jump the <video> back to the live edge. Used when the tab was
+  // backgrounded and playback drifted behind real time.
+  function resyncToLive() {
+    let target = null;
+    if (hls && Number.isFinite(hls.liveSyncPosition)) {
+      target = hls.liveSyncPosition;
+    } else if (video.buffered.length) {
+      target = video.buffered.end(video.buffered.length - 1) - 0.5;
+    }
+    if (target != null && target - video.currentTime > 1) {
+      video.currentTime = target;
+    }
+    video.play().catch(() => {});
+  }
+
   function start() {
     setLoading();
+    recoverAttempts = 0;
 
     if (typeof Hls !== 'undefined' && Hls.isSupported()) {
-      const hls = new Hls({
+      hls = new Hls({
         lowLatencyMode: false,
-        maxBufferLength: 8,
-        maxMaxBufferLength: 16,
+        backBufferLength: 0,
+        maxBufferLength: 6,
+        maxMaxBufferLength: 12,
+        // Stay near live; auto-seek to the edge if we fall too far behind
+        // (e.g. after the tab was throttled in the background).
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 6,
         fragLoadingTimeOut: 8000,
         manifestLoadingTimeOut: 8000,
       });
@@ -352,14 +376,22 @@ cameras.forEach(({ id }) => {
       video.addEventListener('playing', setLive, { once: true });
 
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) {
-          hls.destroy();
-          setOffline();
-          setTimeout(start, RETRY_MS);
+        if (!data.fatal) return;
+        // Decode/buffer glitches (corrupt frames) — try to recover in place
+        // a few times before declaring the tile offline.
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoverAttempts < 3) {
+          recoverAttempts++;
+          hls.recoverMediaError();
+          return;
         }
+        hls.destroy();
+        hls = null;
+        setOffline();
+        setTimeout(start, RETRY_MS);
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // Safari native HLS
+      hls = null;
       video.src = src;
       video.addEventListener('playing', setLive, { once: true });
       video.addEventListener('error', () => {
@@ -371,6 +403,14 @@ cameras.forEach(({ id }) => {
       setOffline();
     }
   }
+
+  // When the tab returns to the foreground, snap to live instead of
+  // resuming the stale buffered position.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && tile.classList.contains('is-live')) {
+      resyncToLive();
+    }
+  });
 
   start();
 });
